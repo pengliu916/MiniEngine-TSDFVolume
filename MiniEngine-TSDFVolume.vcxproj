@@ -101,10 +101,35 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Main.cpp" />
+    <ClInclude Include="ManagedBuf.h" />
+    <ClCompile Include="ManagedBuf.cpp" />
+    <ClInclude Include="TSDFVolume.h" />
+    <ClCompile Include="TSDFVolume.cpp" />
     <ClInclude Include="pch.h" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader>Create</PrecompiledHeader>
     </ClCompile>
+  </ItemGroup>
+  <ItemDefinitionGroup>
+    <CustomBuild>
+      <FileType>Document</FileType>
+      <DeploymentContent>true</DeploymentContent>
+      <Command>copy %(Identity) "$(OutDir)" &gt;NUL</Command>
+      <TreatOutputAsContent>true</TreatOutputAsContent>
+      <Outputs>$(OutDir)\%(Filename)%(Extension)</Outputs>
+      <Message>Copying '%(Identity)' to '$(OutDir)'</Message>
+    </CustomBuild>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <CustomBuild Include="TSDFVolume.hlsli" />
+    <CustomBuild Include="TSDFVolume.inl" />
+    <CustomBuild Include="TSDFVolume_RayCast_ps.hlsl" />
+    <CustomBuild Include="TSDFVolume_RayCast_vs.hlsl" />
+    <CustomBuild Include="TSDFVolume_StepInfo_cs.hlsl" />
+    <CustomBuild Include="TSDFVolume_StepInfo_ps.hlsl" />
+    <CustomBuild Include="TSDFVolume_StepInfo_vs.hlsl" />
+    <CustomBuild Include="TSDFVolume_VolumeUpdate_cs.hlsl" />
+    <CustomBuild Include="TSDFVolume_VolumeReset_cs.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="MiniEngine\MiniEngine.vcxproj">
