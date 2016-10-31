@@ -1,0 +1,176 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Profile|x64">
+      <Configuration>Profile</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{0F8AE16C-7913-4786-8379-B8018AF82843}</ProjectGuid>
+    <RootNamespace>MiniEngine</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0.14393.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v140</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v140</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Profile|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v140</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup />
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <SDLCheck>true</SDLCheck>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>DEBUG;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeTypeInfo>true</RuntimeTypeInfo>
+      <AdditionalIncludeDirectories>.\Core;.\ImGUI;.</AdditionalIncludeDirectories>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>false</SDLCheck>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <PreprocessorDefinitions>RELEASE;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>.\Core;.\ImGUI;.</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Profile|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>false</SDLCheck>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <PreprocessorDefinitions>NDEBUG;PROFILE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>.\Core;.\ImGUI;.</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClInclude Include="Camera.h" />
+    <ClCompile Include="Camera.cpp" />
+    <ClInclude Include="Core\CmdListMngr.h" />
+    <ClCompile Include="Core\CmdListMngr.cpp" />
+    <ClInclude Include="Core\CommandContext.h" />
+    <ClCompile Include="Core\CommandContext.cpp" />
+    <ClInclude Include="Core\CommandSignature.h" />
+    <ClCompile Include="Core\CommandSignature.cpp" />
+    <ClInclude Include="Core\d3dx12.h" />
+    <ClInclude Include="Core\dds.h" />
+    <ClInclude Include="Core\DescriptorHeap.h" />
+    <ClCompile Include="Core\DescriptorHeap.cpp" />
+    <ClInclude Include="Core\DX12Framework.h" />
+    <ClCompile Include="Core\DX12Framework.cpp" />
+    <ClInclude Include="Core\DynamicDescriptorHeap.h" />
+    <ClCompile Include="Core\DynamicDescriptorHeap.cpp" />
+    <ClInclude Include="Core\GpuResource.h" />
+    <ClCompile Include="Core\GpuResource.cpp" />
+    <ClInclude Include="Core\Graphics.h" />
+    <ClCompile Include="Core\Graphics.cpp" />
+    <ClInclude Include="Core\LibraryHeader.h" />
+    <ClCompile Include="Core\LibraryHeader.cpp" />
+    <ClInclude Include="Core\LinearAllocator.h" />
+    <ClCompile Include="Core\LinearAllocator.cpp" />
+    <ClInclude Include="Core\PipelineState.h" />
+    <ClCompile Include="Core\PipelineState.cpp" />
+    <ClInclude Include="Core\RootSignature.h" />
+    <ClCompile Include="Core\RootSignature.cpp" />
+    <ClInclude Include="Core\SamplerMngr.h" />
+    <ClCompile Include="Core\SamplerMngr.cpp" />
+    <ClInclude Include="dds.h" />
+    <ClInclude Include="DDSTextureLoader.h" />
+    <ClCompile Include="DDSTextureLoader.cpp" />
+    <ClInclude Include="DXHelper.h" />
+    <ClInclude Include="FXAA.h" />
+    <ClCompile Include="FXAA.cpp" />
+    <ClInclude Include="GPU_Profiler.h" />
+    <ClCompile Include="GPU_Profiler.cpp" />
+    <ClInclude Include="GuiRenderer.h" />
+    <ClCompile Include="GuiRenderer.cpp" />
+    <ClInclude Include="ImGUI\imconfig.h" />
+    <ClInclude Include="ImGUI\imgui.h" />
+    <ClCompile Include="ImGUI\imgui.cpp" />
+    <ClCompile Include="ImGUI\imgui_demo.cpp" />
+    <ClCompile Include="ImGUI\imgui_draw.cpp" />
+    <ClInclude Include="ImGUI\imgui_internal.h" />
+    <ClInclude Include="ImGUI\stb_rect_pack.h" />
+    <ClInclude Include="ImGUI\stb_textedit.h" />
+    <ClInclude Include="ImGUI\stb_truetype.h" />
+    <ClInclude Include="MsgPrinting.h" />
+    <ClCompile Include="MsgPrinting.cpp" />
+    <ClInclude Include="TextRenderer.h" />
+    <ClCompile Include="TextRenderer.cpp" />
+    <ClInclude Include="Utility.h" />
+  </ItemGroup>
+  <ItemDefinitionGroup>
+    <CustomBuild>
+      <FileType>Document</FileType>
+      <DeploymentContent>true</DeploymentContent>
+      <Command>copy %(Identity) "$(OutDir)" &gt;NUL</Command>
+      <TreatOutputAsContent>true</TreatOutputAsContent>
+      <Outputs>$(OutDir)\%(Filename)%(Extension)</Outputs>
+      <Message>Copying '%(Identity)' to '$(OutDir)'</Message>
+    </CustomBuild>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <CustomBuild Include="Core\Graphics.hlsl" />
+    <CustomBuild Include="FXAA.hlsl" />
+    <CustomBuild Include="GPU_Profiler.hlsl" />
+    <CustomBuild Include="TextRenderer.hlsl" />
+    <CustomBuild Include="FXAA_SharedHeader.inl" />
+    <CustomBuild Include="TextRenderer_SharedHeader.inl" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

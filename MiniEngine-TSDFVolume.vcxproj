@@ -101,10 +101,15 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Main.cpp" />
-    <ClCompile Include="pch.cpp" />
+    <ClInclude Include="pch.h" />
+    <ClCompile Include="pch.cpp">
+      <PrecompiledHeader>Create</PrecompiledHeader>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="pch.h" />
+    <ProjectReference Include="MiniEngine\MiniEngine.vcxproj">
+      <Project>{0f8ae16c-7913-4786-8379-b8018af82843}</Project>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
