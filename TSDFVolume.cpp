@@ -323,6 +323,7 @@ TSDFVolume::TSDFVolume()
     _ratioIdx = 0;
     _cbPerCall.uNumOfBalls = 20;
     _cbPerFrame.bBlockRayCast = false;
+    _cbPerFrame.bInterpolatedNearSurface = false;
 }
 
 TSDFVolume::~TSDFVolume()
@@ -566,11 +567,13 @@ TSDFVolume::_RenderGui()
     ImGui::Separator();
     static int iFilterType = (int)_filterType;
     ImGui::Text("Sample Method:");
+    ImGui::Checkbox("Interpolate only near surface",
+        (bool*)&_cbPerFrame.bInterpolatedNearSurface);
     ImGui::RadioButton("Uninterpolated", &iFilterType, kNoFilter);
     ImGui::RadioButton("Trilinear", &iFilterType, kLinearFilter);
     ImGui::RadioButton("Trilinear Sampler", &iFilterType, kSamplerLinear);
     if (_volBuf.GetType() != ManagedBuf::k3DTexBuffer &&
-        iFilterType != kSamplerLinear) {
+        iFilterType == kSamplerLinear) {
         iFilterType = _filterType;
     }
     _filterType = (FilterType)iFilterType;

@@ -45,7 +45,7 @@ bool IntersectBox(Ray r, float3 boxmin, float3 boxmax,
     return tnear <= tfar;
 }
 
-float readVolume(float3 f3Idx)
+float interpolatedRead(float3 f3Idx)
 {
 #if FILTER_READ == 1
     int3 i3Idx000;
@@ -74,12 +74,17 @@ float readVolume(float3 f3Idx)
 #endif // !FILTER_READ
 }
 
+float uninterpolatedRead(float3 f3Idx)
+{
+    return tex_srvTSDFVol[BUFFER_INDEX((int3)f3Idx)];
+}
+
 float3 getNormal(float3 f3Idx)
 {
-    float f000 = readVolume(f3Idx);
-    float f100 = readVolume(f3Idx + float3(1.f, 0.f, 0.f));
-    float f010 = readVolume(f3Idx + float3(0.f, 1.f, 0.f));
-    float f001 = readVolume(f3Idx + float3(0.f, 0.f, 1.f));
+    float f000 = interpolatedRead(f3Idx);
+    float f100 = interpolatedRead(f3Idx + float3(1.f, 0.f, 0.f));
+    float f010 = interpolatedRead(f3Idx + float3(0.f, 1.f, 0.f));
+    float f001 = interpolatedRead(f3Idx + float3(0.f, 0.f, 1.f));
     return normalize(float3(f100 - f000, f010 - f000, f001 - f000));
 }
 
@@ -122,7 +127,15 @@ void isoSurfaceShading(Ray eyeray, float2 f2NearFar,
         }
 #endif
         fPreTSDF = fCurTSDF;
-        fCurTSDF = readVolume(f3Idx) * vParam.fTruncDist;
+        if (bInterpolatedNearSurface) {
+            fCurTSDF = uninterpolatedRead(f3Idx);
+            if (fCurTSDF < 1.f) {
+                fCurTSDF = interpolatedRead(f3Idx) * vParam.fTruncDist;
+            }
+        } else {
+            fCurTSDF = interpolatedRead(f3Idx) * vParam.fTruncDist;
+        }
+
         if (fCurTSDF < 0) {
             bSurfaceFound = true;
             break;

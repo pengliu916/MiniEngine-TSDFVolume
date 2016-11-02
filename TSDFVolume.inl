@@ -57,8 +57,9 @@ CBUFFER_ALIGN STRUCT(cbuffer) PerFrameDataCB REGISTER(b0)
     float4 f4ViewPos;
     float4 f4Balls[MAX_BALLS];
     float4 f4BallsCol[MAX_BALLS];
-    bool bBlockRayCast;
-    int NIUb[3];
+    int bBlockRayCast;
+    int bInterpolatedNearSurface;
+    int NIUb[2];
 #if !__hlsl
     void* operator new(size_t i) {
         return _aligned_malloc(i, 
