@@ -55,8 +55,8 @@ bool IntersectBox(Ray r, float3 boxmin, float3 boxmax,
 float readVolume(float3 f3Idx)
 {
     int3 i3Idx000;
-    float3 f3d = modf(f3Idx - 0.5f, i3Idx000);
 #if FILTER_READ == 1
+    float3 f3d = modf(f3Idx - 0.5f, i3Idx000);
     float res1, res2, v1, v2;
     v1 = tex_srvTSDFVol[BUFFER_INDEX(i3Idx000 + uint3(0, 0, 0))];
     v2 = tex_srvTSDFVol[BUFFER_INDEX(i3Idx000 + uint3(1, 0, 0))];
@@ -74,6 +74,7 @@ float readVolume(float3 f3Idx)
 #elif TEX3D_UAV && FILTER_READ > 1
     return tex_srvTSDFVol.SampleLevel(SAMPLER, f3Idx / vParam.u3VoxelReso, 0);
 #else
+    modf(f3Idx, i3Idx000);
     return tex_srvTSDFVol[BUFFER_INDEX(i3Idx000)];
 #endif // !FILTER_READ
 }
