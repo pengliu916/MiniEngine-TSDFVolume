@@ -11,13 +11,6 @@ Texture2D<float2> tex_srvNearFar : register(t1);
 Texture3D<int> tex_srvFlagVol : register(t2);
 #endif // ENABLE_BRICKS
 SamplerState samp_Linear : register(s0);
-SamplerState samp_Aniso : register(s1);
-
-#if TEX3D_UAV && FILTER_READ == 2
-#define SAMPLER samp_Linear
-#elif TEX3D_UAV && FILTER_READ == 3
-#define SAMPLER samp_Aniso
-#endif
 
 //------------------------------------------------------------------------------
 // Structures
@@ -54,8 +47,8 @@ bool IntersectBox(Ray r, float3 boxmin, float3 boxmax,
 
 float readVolume(float3 f3Idx)
 {
-    int3 i3Idx000;
 #if FILTER_READ == 1
+    int3 i3Idx000;
     float3 f3d = modf(f3Idx - 0.5f, i3Idx000);
     float res1, res2, v1, v2;
     v1 = tex_srvTSDFVol[BUFFER_INDEX(i3Idx000 + uint3(0, 0, 0))];
@@ -72,8 +65,10 @@ float readVolume(float3 f3Idx)
     res2 = (1.f - f3d.y) * res2 + f3d.y * ((1.f - f3d.x) * v1 + f3d.x * v2);
     return (1.f - f3d.z) * res1 + f3d.z * res2;
 #elif TEX3D_UAV && FILTER_READ > 1
-    return tex_srvTSDFVol.SampleLevel(SAMPLER, f3Idx / vParam.u3VoxelReso, 0);
+    return tex_srvTSDFVol.SampleLevel(
+        samp_Linear, f3Idx / vParam.u3VoxelReso, 0);
 #else
+    int3 i3Idx000;
     modf(f3Idx, i3Idx000);
     return tex_srvTSDFVol[BUFFER_INDEX(i3Idx000)];
 #endif // !FILTER_READ

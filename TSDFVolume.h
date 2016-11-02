@@ -14,7 +14,6 @@ public:
         kNoFilter = 0,
         kLinearFilter,
         kSamplerLinear,
-        kSamplerAniso,
         kNumFilter
     };
 

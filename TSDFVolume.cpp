@@ -128,18 +128,14 @@ namespace {
                 macro[3].Definition = "2"; // FILTER_READ
                 V(_Compile(L"TSDFVolume_RayCast_ps.hlsl", "ps_5_1",
                     macro, &raycastPS[i][j][TSDFVolume::kSamplerLinear]));
-                macro[3].Definition = "3"; // FILTER_READ
-                V(_Compile(L"TSDFVolume_RayCast_ps.hlsl", "ps_5_1",
-                    macro, &raycastPS[i][j][TSDFVolume::kSamplerAniso]));
                 macro[3].Definition = "0"; // FILTER_READ
                 macro[DefIdx].Definition = "0";
             }
             compiledOnce = true;
         }
         // Create Rootsignature
-        _rootsig.Reset(4, 2);
+        _rootsig.Reset(4, 1);
         _rootsig.InitStaticSampler(0, Graphics::g_SamplerLinearClampDesc);
-        _rootsig.InitStaticSampler(1, Graphics::g_SamplerAnisoWrapDesc);
         _rootsig[0].InitAsConstantBuffer(0);
         _rootsig[1].InitAsConstantBuffer(1);
         _rootsig[2].InitAsDescriptorRange(
@@ -423,9 +419,7 @@ TSDFVolume::OnUpdate()
         _UpdateVolumeSettings(reso);
         _CreateBrickVolume(reso, _ratios[_ratioIdx]);
     }
-    ImGui::Begin("TSDFVolume");
     _RenderGui();
-    ImGui::End();
 }
 
 bool TSDFVolume::OnEvent(MSG* msg)
@@ -557,103 +551,103 @@ TSDFVolume::_OnRender(CommandContext& cmdCtx, const DirectX::XMMATRIX& wvp,
 void
 TSDFVolume::_RenderGui()
 {
-    static bool showPenal = true;
-    if (ImGui::CollapsingHeader("Sparse Volume", 0, true, true)) {
-        ImGui::Checkbox("Animation", &_isAnimated);
-        if (ImGui::Checkbox("StepInfoTex", &_useStepInfoTex) &&
-            _useStepInfoTex) {
-            _needVolumeRebuild |= true;
-        }
-        if (_useStepInfoTex) {
-            ImGui::Indent();
-            ImGui::Checkbox("Block Ray Cast", (bool*)&_cbPerFrame.bBlockRayCast);
-            ImGui::Checkbox("Draw Debug Grid", &_stepInfoDebug);
-            ImGui::Unindent();
-        }
-        ImGui::Separator();
-        static int iFilterType = (int)_filterType;
-        ImGui::RadioButton("No Filter", &iFilterType, kNoFilter);
-        ImGui::RadioButton("Linear Filter", &iFilterType, kLinearFilter);
-        ImGui::RadioButton("Linear Sampler", &iFilterType, kSamplerLinear);
-        ImGui::RadioButton("Aniso Sampler", &iFilterType, kSamplerAniso);
-        if (_volBuf.GetType() != ManagedBuf::k3DTexBuffer &&
-            iFilterType > kLinearFilter) {
-            iFilterType = _filterType;
-        }
-        _filterType = (FilterType)iFilterType;
-
-        ImGui::Separator();
-        ImGui::Text("Buffer Settings:");
-        static int uBufferBitChoice = _volBuf.GetBit();
-        static int uBufferTypeChoice = _volBuf.GetType();
-        ImGui::RadioButton("8Bit", &uBufferBitChoice,
-            ManagedBuf::k8Bit); ImGui::SameLine();
-        ImGui::RadioButton("16Bit", &uBufferBitChoice,
-            ManagedBuf::k16Bit); ImGui::SameLine();
-        ImGui::RadioButton("32Bit", &uBufferBitChoice,
-            ManagedBuf::k32Bit);
-        ImGui::RadioButton("Use Typed Buffer", &uBufferTypeChoice,
-            ManagedBuf::kTypedBuffer);
-        ImGui::RadioButton("Use Texture3D Buffer", &uBufferTypeChoice,
-            ManagedBuf::k3DTexBuffer);
-        if (iFilterType > kLinearFilter &&
-            uBufferTypeChoice != ManagedBuf::k3DTexBuffer) {
-            uBufferTypeChoice = _volBuf.GetType();
-        }
-        if ((uBufferTypeChoice != _volBuf.GetType() ||
-            uBufferBitChoice != _volBuf.GetBit()) &&
-            !_volBuf.ChangeResource(_volBuf.GetReso(),
-            (ManagedBuf::Type)uBufferTypeChoice,
-                (ManagedBuf::Bit)uBufferBitChoice)) {
-            uBufferTypeChoice = _volBuf.GetType();
-        }
-
-        ImGui::Separator();
-        ImGui::Text("Spacial Structure:");
-        static int iIdx = _ratioIdx;
-        ImGui::SliderInt("BrickBox Ratio", &iIdx, 0,
-            (uint)(_ratios.size() - 1), "");
-        iIdx = iIdx >= (int)_ratios.size() ? (int)_ratios.size() - 1 : iIdx;
-        if (iIdx != _ratioIdx) {
-            _ratioIdx = iIdx;
-            PRINTINFO("Ratio:%d", _ratios[_ratioIdx]);
-            _volParam->uVoxelBrickRatio = _ratios[_ratioIdx];
-            _volParam->fBlockSize = _ratios[_ratioIdx] * _volParam->fVoxelSize;
-            _CreateBrickVolume(_curReso, _ratios[_ratioIdx]);
-            _needVolumeRebuild |= true;
-        }
-        ImGui::Separator();
-
-        ImGui::Text("Volume Size Settings:");
-        static uint3 uiReso = _volBuf.GetReso();
-        ImGui::AlignFirstTextHeightToWidgets();
-        ImGui::RadioButton("128x256x256##X", (int*)&uiReso.z, 128);
-        ImGui::RadioButton("192x384x384##X", (int*)&uiReso.z, 192);
-        ImGui::RadioButton("256x512x512##X", (int*)&uiReso.z, 256);
-        ImGui::RadioButton("320x640x640##X", (int*)&uiReso.z, 320);
-        // Since Buffer Element Count is limited to 2^27, the following reso
-        // will not satisfied this requirement
-        /*
-        ImGui::RadioButton("384x768x768##X", (int*)&uiReso.z, 384);
-        ImGui::RadioButton("448x896x896##X", (int*)&uiReso.z, 448);
-        */
-        uiReso.x = uiReso.y = uiReso.z * 2;
-        if ((_IsResolutionChanged(uiReso, _submittedReso) ||
-            _volBuf.GetType() != uBufferTypeChoice) &&
-            _volBuf.ChangeResource(
-                uiReso, _volBuf.GetType(), ManagedBuf::k32Bit)) {
-            PRINTINFO("Reso:%dx%dx%d", uiReso.x, uiReso.y, uiReso.z);
-            _submittedReso = uiReso;
-        } else {
-            uiReso = _submittedReso;
-        }
-        ImGui::SliderFloat("MaxWeight", &_volParam->fMaxWeight, 1.f, 500.f);
-
-        ImGui::Separator();
-        if (ImGui::Button("Recompile All Shaders")) {
-            _CreatePSOs();
-        }
+    ImGui::Begin("TSDFVolume");
+    ImGui::Checkbox("Animation", &_isAnimated);
+    if (ImGui::Checkbox("StepInfoTex", &_useStepInfoTex) &&
+        _useStepInfoTex) {
+        _needVolumeRebuild |= true;
     }
+    if (_useStepInfoTex) {
+        ImGui::Indent();
+        ImGui::Checkbox("Block Ray Cast", (bool*)&_cbPerFrame.bBlockRayCast);
+        ImGui::Checkbox("Draw Debug Grid", &_stepInfoDebug);
+        ImGui::Unindent();
+    }
+    ImGui::Separator();
+    static int iFilterType = (int)_filterType;
+    ImGui::Text("Sample Method:");
+    ImGui::RadioButton("Uninterpolated", &iFilterType, kNoFilter);
+    ImGui::RadioButton("Trilinear", &iFilterType, kLinearFilter);
+    ImGui::RadioButton("Trilinear Sampler", &iFilterType, kSamplerLinear);
+    if (_volBuf.GetType() != ManagedBuf::k3DTexBuffer &&
+        iFilterType != kSamplerLinear) {
+        iFilterType = _filterType;
+    }
+    _filterType = (FilterType)iFilterType;
+
+    ImGui::Separator();
+    ImGui::Text("Buffer Settings:");
+    static int uBufferBitChoice = _volBuf.GetBit();
+    static int uBufferTypeChoice = _volBuf.GetType();
+    ImGui::RadioButton("8Bit", &uBufferBitChoice,
+        ManagedBuf::k8Bit); ImGui::SameLine();
+    ImGui::RadioButton("16Bit", &uBufferBitChoice,
+        ManagedBuf::k16Bit); ImGui::SameLine();
+    ImGui::RadioButton("32Bit", &uBufferBitChoice,
+        ManagedBuf::k32Bit);
+    ImGui::RadioButton("Use Typed Buffer", &uBufferTypeChoice,
+        ManagedBuf::kTypedBuffer);
+    ImGui::RadioButton("Use Texture3D Buffer", &uBufferTypeChoice,
+        ManagedBuf::k3DTexBuffer);
+    if (iFilterType > kLinearFilter &&
+        uBufferTypeChoice != ManagedBuf::k3DTexBuffer) {
+        uBufferTypeChoice = _volBuf.GetType();
+    }
+    if ((uBufferTypeChoice != _volBuf.GetType() ||
+        uBufferBitChoice != _volBuf.GetBit()) &&
+        !_volBuf.ChangeResource(_volBuf.GetReso(),
+        (ManagedBuf::Type)uBufferTypeChoice,
+            (ManagedBuf::Bit)uBufferBitChoice)) {
+        uBufferTypeChoice = _volBuf.GetType();
+    }
+
+    ImGui::Separator();
+    ImGui::Text("Spacial Structure:");
+    static int iIdx = _ratioIdx;
+    ImGui::SliderInt("BrickBox Ratio", &iIdx, 0,
+        (uint)(_ratios.size() - 1), "");
+    iIdx = iIdx >= (int)_ratios.size() ? (int)_ratios.size() - 1 : iIdx;
+    if (iIdx != _ratioIdx) {
+        _ratioIdx = iIdx;
+        PRINTINFO("Ratio:%d", _ratios[_ratioIdx]);
+        _volParam->uVoxelBrickRatio = _ratios[_ratioIdx];
+        _volParam->fBlockSize = _ratios[_ratioIdx] * _volParam->fVoxelSize;
+        _CreateBrickVolume(_curReso, _ratios[_ratioIdx]);
+        _needVolumeRebuild |= true;
+    }
+    ImGui::Separator();
+
+    ImGui::Text("Volume Size Settings:");
+    static uint3 uiReso = _volBuf.GetReso();
+    ImGui::AlignFirstTextHeightToWidgets();
+    ImGui::RadioButton("128x256x256##X", (int*)&uiReso.z, 128);
+    ImGui::RadioButton("192x384x384##X", (int*)&uiReso.z, 192);
+    ImGui::RadioButton("256x512x512##X", (int*)&uiReso.z, 256);
+    ImGui::RadioButton("320x640x640##X", (int*)&uiReso.z, 320);
+    // Since Buffer Element Count is limited to 2^27, the following reso
+    // will not satisfied this requirement
+    /*
+    ImGui::RadioButton("384x768x768##X", (int*)&uiReso.z, 384);
+    ImGui::RadioButton("448x896x896##X", (int*)&uiReso.z, 448);
+    */
+    uiReso.x = uiReso.y = uiReso.z * 2;
+    if ((_IsResolutionChanged(uiReso, _submittedReso) ||
+        _volBuf.GetType() != uBufferTypeChoice) &&
+        _volBuf.ChangeResource(
+            uiReso, _volBuf.GetType(), ManagedBuf::k32Bit)) {
+        PRINTINFO("Reso:%dx%dx%d", uiReso.x, uiReso.y, uiReso.z);
+        _submittedReso = uiReso;
+    }
+    else {
+        uiReso = _submittedReso;
+    }
+    ImGui::SliderFloat("MaxWeight", &_volParam->fMaxWeight, 1.f, 500.f);
+
+    ImGui::Separator();
+    if (ImGui::Button("Recompile All Shaders")) {
+        _CreatePSOs();
+    }
+    ImGui::End();
 }
 
 void
