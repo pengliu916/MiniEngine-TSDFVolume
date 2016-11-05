@@ -21,3 +21,17 @@ uint3 makeU3Idx(uint idx, uint3 res)
     uint x = stripRemainder % res.x;
     return uint3(x, y, z);
 }
+
+uint PackedToUint(uint3 xyz)
+{
+    return(xyz.z | ((xyz.y) << 10) | ((xyz.x) << 20));
+}
+
+uint3 UnpackedToUint3(uint x)
+{
+    uint3 xyz;
+    xyz.z = x & 0x000003ff;
+    xyz.y = (x >> 10) & 0x000003ff;
+    xyz.x = (x >> 20) & 0x000003ff;
+    return xyz;
+}

@@ -51,10 +51,12 @@ private:
     void _UpdatePerFrameData(const DirectX::XMMATRIX& wvp,
         const DirectX::XMMATRIX& mView, const DirectX::XMFLOAT4& eyePos);
     void _UpdateVolumeSettings(const uint3 reso);
+    void _UpdateBlockSettings(const uint blockVoxelRatio);
     void _CleanTSDFBuffer(ComputeContext& cptCtx,
         const ManagedBuf::BufInterface& buf);
     // Render subroutine
     void _CleanBrickVolume(ComputeContext& cptCtx);
+    void _UpdateBlockVolume(CommandContext& cmdCtx);
     void _UpdateVolume(CommandContext& cmdCtx,
         const ManagedBuf::BufInterface& buf);
     void _RenderVolume(GraphicsContext& gfxCtx,
@@ -75,6 +77,8 @@ private:
     ManagedBuf _volBuf;
     VolumeTexture _flagVol;
     ColorBuffer _stepInfoTex;
+    StructuredBuffer _blockWorkBuf;
+    IndirectArgsBuffer _indirectParams;
     PerFrameDataCB _cbPerFrame;
     PerCallDataCB _cbPerCall;
     // point to vol data section in _cbPerCall

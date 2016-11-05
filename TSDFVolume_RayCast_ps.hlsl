@@ -108,7 +108,7 @@ void isoSurfaceShading(Ray eyeray, float2 f2NearFar,
     while (t <= f2NearFar.y) {
 #if ENABLE_BRICKS
         if (bBlockRayCast) {
-            modf(f3Idx / vParam.uVoxelBrickRatio, i3NewBlockIdx);
+            modf(f3Idx / vParam.uVoxelBlockRatio, i3NewBlockIdx);
             if (any(i3BlockIdx != i3NewBlockIdx)) {
                 i3BlockIdx = i3NewBlockIdx;
                 bActiveBlock = tex_srvFlagVol[i3BlockIdx];

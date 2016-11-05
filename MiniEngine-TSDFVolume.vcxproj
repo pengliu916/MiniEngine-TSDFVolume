@@ -130,6 +130,9 @@
     <CustomBuild Include="TSDFVolume_StepInfo_vs.hlsl" />
     <CustomBuild Include="TSDFVolume_VolumeUpdate_cs.hlsl" />
     <CustomBuild Include="TSDFVolume_VolumeReset_cs.hlsl" />
+    <CustomBuild Include="TSDFVolume_BlockQueueCreate_cs.hlsl" />
+    <CustomBuild Include="TSDFVolume_BlockQueueResolve_cs.hlsl" />
+    <CustomBuild Include="TSDFVolume_BlocksUpdate_cs.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="MiniEngine\MiniEngine.vcxproj">

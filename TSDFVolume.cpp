@@ -12,7 +12,8 @@ namespace {
 
     bool _useStepInfoTex = false;
     bool _stepInfoDebug = false;
-    bool _resetVolume = false;
+    bool _blockVolumeUpdate = false;
+    bool _resetVolume = true;
 
     // define the geometry for a triangle.
     const XMFLOAT3 cubeVertices[] = {
@@ -38,6 +39,10 @@ namespace {
     GraphicsPSO _gfxStepInfoPSO;
     GraphicsPSO _gfxStepInfoDebugPSO;
     ComputePSO _cptFlagVolResetPSO;
+    ComputePSO _cptCreateBlockQueuePSO;
+    ComputePSO _cptBlockQueueResolvePSO;
+    ComputePSO _cptBlockVolumeUpdatePSO[ManagedBuf::kNumType]
+        [TSDFVolume::kNumStruct];
     ComputePSO _cptTSDFBufResetPSO[ManagedBuf::kNumType];
     StructuredBuffer _cubeVB;
     ByteAddressBuffer _cubeTriangleStripIB;
@@ -46,7 +51,7 @@ namespace {
     BOOLEAN GetBaseAndPower2(uint16_t input, uint16_t& base, uint16_t& power2)
     {
         uint32_t index;
-        BOOLEAN isZero = _BitScanForward((unsigned long*)&index, input);
+        BOOLEAN isZero = _BitScanReverse((unsigned long*)&index, input);
         power2 = (uint16_t)index;
         base = input >> power2;
         return isZero;
@@ -59,8 +64,7 @@ namespace {
         GetBaseAndPower2(minDimension, base, power2);
         ASSERT(power2 > 3);
         ratios.clear();
-        for (uint16_t i = base == 1 ? 1 : 0;
-            i < (base == 1 ? power2 - 1 : power2); ++i) {
+        for (uint16_t i = 3; i <  power2 - 1; ++i) {
             ratios.push_back(1 << i);
         }
     }
@@ -85,6 +89,8 @@ namespace {
         // Compile Shaders
         ComPtr<ID3DBlob>
             volUpdateCS[ManagedBuf::kNumType][TSDFVolume::kNumStruct];
+        ComPtr<ID3DBlob>
+            blockUpdateCS[ManagedBuf::kNumType][TSDFVolume::kNumStruct];
         ComPtr<ID3DBlob> cubeVS, stepInfoVS, volReset[ManagedBuf::kNumType];
         ComPtr<ID3DBlob> raycastPS[ManagedBuf::kNumType]
             [TSDFVolume::kNumStruct][TSDFVolume::kNumFilter];
@@ -120,6 +126,8 @@ namespace {
                 }
                 V(_Compile(L"TSDFVolume_VolumeUpdate_cs.hlsl", "cs_5_1",
                     macro, &volUpdateCS[i][j]));
+                V(_Compile(L"TSDFVolume_BlocksUpdate_cs.hlsl", "cs_5_1",
+                    macro, &blockUpdateCS[i][j]));
                 V(_Compile(L"TSDFVolume_RayCast_ps.hlsl", "ps_5_1",
                     macro, &raycastPS[i][j][TSDFVolume::kNoFilter]));
                 macro[3].Definition = "1"; // FILTER_READ
@@ -158,6 +166,12 @@ namespace {
         DXGI_FORMAT ColorFormat = Graphics::g_SceneColorBuffer.GetFormat();
         DXGI_FORMAT DepthFormat = Graphics::g_SceneDepthBuffer.GetFormat();
         DXGI_FORMAT Tex3DFormat = DXGI_FORMAT_R32G32B32A32_FLOAT;
+
+#define CreatePSO( ObjName, Shader)\
+ObjName.SetRootSignature(_rootsig);\
+ObjName.SetComputeShader(Shader->GetBufferPointer(), Shader->GetBufferSize());\
+ObjName.Finalize();
+
         for (int k = 0; k < TSDFVolume::kNumStruct; ++k) {
             static bool compiledOnce = false;
             for (int i = 0; i < ManagedBuf::kNumType; ++i) {
@@ -183,24 +197,18 @@ namespace {
                         raycastPS[i][k][j]->GetBufferSize());
                     _gfxRenderPSO[i][k][j].Finalize();
                 }
-                _cptUpdatePSO[i][k].SetRootSignature(_rootsig);
-                _cptUpdatePSO[i][k].SetComputeShader(
-                    volUpdateCS[i][k]->GetBufferPointer(),
-                    volUpdateCS[i][k]->GetBufferSize());
-                _cptUpdatePSO[i][k].Finalize();
+                CreatePSO(_cptUpdatePSO[i][k], volUpdateCS[i][k]);
+                CreatePSO(_cptBlockVolumeUpdatePSO[i][k], blockUpdateCS[i][k]);
                 if (!compiledOnce) {
-                    _cptTSDFBufResetPSO[i].SetRootSignature(_rootsig);
-                    _cptTSDFBufResetPSO[i].SetComputeShader(
-                        volReset[i]->GetBufferPointer(),
-                        volReset[i]->GetBufferSize());
-                    _cptTSDFBufResetPSO[i].Finalize();
+                    CreatePSO(_cptTSDFBufResetPSO[i], volReset[i]);
                 }
             }
             compiledOnce = true;
         }
 
         // Create PSO for render near far plane
-        ComPtr<ID3DBlob> stepInfoPS, stepInfoDebugPS, resetCS;
+        ComPtr<ID3DBlob> stepInfoPS, stepInfoDebugPS, resetCS,
+            createBlockQueueCS, resolveBlockQueueCS;
         D3D_SHADER_MACRO macro1[] = {
             {"__hlsl", "1"},
             {"DEBUG_VIEW", "0"},
@@ -212,15 +220,21 @@ namespace {
             macro1, &stepInfoPS));
         V(_Compile(L"TSDFVolume_StepInfo_vs.hlsl", "vs_5_1",
             macro1, &stepInfoVS));
+        V(_Compile(L"TSDFVolume_BlockQueueCreate_cs.hlsl", "cs_5_1",
+            macro1, &createBlockQueueCS));
+        V(_Compile(L"TSDFVolume_BlockQueueResolve_cs.hlsl", "cs_5_1",
+            macro1, &resolveBlockQueueCS));
         macro[1].Definition = "1";
         V(_Compile(L"TSDFVolume_StepInfo_ps.hlsl", "ps_5_1",
             macro1, &stepInfoDebugPS));
 
         // Create PSO for clean brick volume
-        _cptFlagVolResetPSO.SetRootSignature(_rootsig);
-        _cptFlagVolResetPSO.SetComputeShader(
-            resetCS->GetBufferPointer(), resetCS->GetBufferSize());
-        _cptFlagVolResetPSO.Finalize();
+        CreatePSO(_cptFlagVolResetPSO, resetCS);
+
+        // Create PSO for update block volume
+        CreatePSO(_cptCreateBlockQueuePSO, createBlockQueueCS);
+        CreatePSO(_cptBlockQueueResolvePSO, resolveBlockQueueCS);
+#undef  CreatePSO
 
         _gfxStepInfoPSO.SetRootSignature(_rootsig);
         _gfxStepInfoPSO.SetPrimitiveRestart(
@@ -345,13 +359,20 @@ TSDFVolume::OnCreateResource()
     ASSERT(Graphics::g_device);
     // Create resource for volume
     _volBuf.CreateResource();
+    _blockWorkBuf.Create(L"Work Queue", 0xfffff, 4);
+
+    // Initial value for dispatch indirect args. args are thread group count
+    // x, y, z. Since we only need 1 dispatch thread group, so we pre-populate
+    // 1, 1 for threadgroup Y and Z
+    __declspec(align(16)) const uint32_t initArgs[3] = { 0,1,1 };
+    _indirectParams.Create(L"TSDFVolume Indirect Params",
+        1, sizeof(D3D12_DISPATCH_ARGUMENTS), initArgs);
 
     const uint3 reso = _volBuf.GetReso();
     _submittedReso = reso;
     _UpdateVolumeSettings(reso);
-    _ratioIdx = (uint)(_ratios.size() - 2);
-    _volParam->uVoxelBrickRatio = _ratios[_ratioIdx];
-    _volParam->fBlockSize = _ratios[_ratioIdx] * _volParam->fVoxelSize;
+    _ratioIdx = (uint)(max((int32_t)_ratios.size() - 2, 0));
+    _UpdateBlockSettings(_ratios[_ratioIdx]);
 
     // Create Spacial Structure Buffer
     _CreateBrickVolume(reso, _ratios[_ratioIdx]);
@@ -370,6 +391,8 @@ TSDFVolume::OnCreateResource()
 void
 TSDFVolume::OnDestroy()
 {
+    _indirectParams.Destroy();
+    _blockWorkBuf.Destroy();
     _volBuf.Destroy();
     _flagVol.Destroy();
     _stepInfoTex.Destroy();
@@ -463,20 +486,25 @@ bool TSDFVolume::OnEvent(MSG* msg)
 void
 TSDFVolume::_OnIntegrate(CommandContext& cmdCtx)
 {
-    ComputeContext& cptContext = cmdCtx.GetComputeContext();
+    ComputeContext& cptCtx = cmdCtx.GetComputeContext();
     if (_resetVolume) {
-        _CleanTSDFBuffer(cptContext, _curBufInterface);
-        _CleanBrickVolume(cptContext);
+        _CleanTSDFBuffer(cptCtx, _curBufInterface);
+        _CleanBrickVolume(cptCtx);
         _resetVolume = false;
         _needVolumeRebuild = true;
     }
 
     if (_isAnimated || _needVolumeRebuild) {
+        cptCtx.SetRootSignature(_rootsig);
+        cptCtx.SetDynamicConstantBufferView(
+            0, sizeof(_cbPerFrame), (void*)&_cbPerFrame);
+        cptCtx.SetDynamicConstantBufferView(
+            1, sizeof(_cbPerCall), (void*)&_cbPerCall);
         if (_useStepInfoTex) {
-            cptContext.TransitionResource(_flagVol,
+            cptCtx.TransitionResource(_flagVol,
                 D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-            _CleanBrickVolume(cptContext);
-            cptContext.TransitionResource(_flagVol,
+            _CleanBrickVolume(cptCtx);
+            cptCtx.TransitionResource(_flagVol,
                 D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         }
         cmdCtx.TransitionResource(*_curBufInterface.resource[0],
@@ -554,6 +582,11 @@ TSDFVolume::_RenderGui()
 {
     ImGui::Begin("TSDFVolume");
     ImGui::Checkbox("Animation", &_isAnimated);
+    if (_isAnimated) {
+        ImGui::Indent();
+        ImGui::Checkbox("Block Volume Update", &_blockVolumeUpdate);
+        ImGui::Unindent();
+    }
     if (ImGui::Checkbox("StepInfoTex", &_useStepInfoTex) &&
         _useStepInfoTex) {
         _needVolumeRebuild |= true;
@@ -613,8 +646,7 @@ TSDFVolume::_RenderGui()
     if (iIdx != _ratioIdx) {
         _ratioIdx = iIdx;
         PRINTINFO("Ratio:%d", _ratios[_ratioIdx]);
-        _volParam->uVoxelBrickRatio = _ratios[_ratioIdx];
-        _volParam->fBlockSize = _ratios[_ratioIdx] * _volParam->fVoxelSize;
+        _UpdateBlockSettings(_ratios[_ratioIdx]);
         _CreateBrickVolume(_curReso, _ratios[_ratioIdx]);
         _needVolumeRebuild |= true;
     }
@@ -640,11 +672,9 @@ TSDFVolume::_RenderGui()
             uiReso, _volBuf.GetType(), ManagedBuf::k32Bit)) {
         PRINTINFO("Reso:%dx%dx%d", uiReso.x, uiReso.y, uiReso.z);
         _submittedReso = uiReso;
-    }
-    else {
+    } else {
         uiReso = _submittedReso;
     }
-    ImGui::SliderFloat("MaxWeight", &_volParam->fMaxWeight, 1.f, 500.f);
 
     ImGui::Separator();
     if (ImGui::Button("Recompile All Shaders")) {
@@ -714,8 +744,18 @@ TSDFVolume::_UpdateVolumeSettings(const uint3 reso)
     _BuildBrickRatioVector(min(reso.x, min(reso.y, reso.z)), _ratios);
     _ratioIdx = _ratioIdx >= (int)_ratios.size()
         ? (int)_ratios.size() - 1 : _ratioIdx;
-    _volParam->uVoxelBrickRatio = _ratios[_ratioIdx];
-    _volParam->fBlockSize = _ratios[_ratioIdx] * voxelSize;
+    _UpdateBlockSettings(_ratios[_ratioIdx]);
+}
+
+void
+TSDFVolume::_UpdateBlockSettings(const uint blockVoxelRatio)
+{
+    _volParam->uVoxelBlockRatio = blockVoxelRatio;
+    _volParam->fBlockSize = blockVoxelRatio * _volParam->fVoxelSize;
+    uint TGBlockRatio = blockVoxelRatio / THREAD_X;
+    _volParam->uThreadGroupBlockRatio = TGBlockRatio;
+    _volParam->uThreadGroupPerBlock =
+        TGBlockRatio * TGBlockRatio * TGBlockRatio;
 }
 
 void
@@ -727,7 +767,6 @@ TSDFVolume::_CleanTSDFBuffer(
     cptCtx.SetRootSignature(_rootsig);
     cptCtx.SetDynamicDescriptors(2, 0, 2, buf.UAV);
     const uint3 xyz = _volParam->u3VoxelReso;
-    const uint ratio = _volParam->uVoxelBrickRatio;
     cptCtx.Dispatch3D(xyz.x, xyz.y, xyz.z, THREAD_X, THREAD_Y, THREAD_Z);
 }
 
@@ -736,48 +775,97 @@ TSDFVolume::_CleanBrickVolume(ComputeContext& cptCtx)
 {
     GPU_PROFILE(cptCtx, L"Volume Reset");
     cptCtx.SetPipelineState(_cptFlagVolResetPSO);
-    cptCtx.SetRootSignature(_rootsig);
     cptCtx.SetDynamicDescriptors(2, 1, 1, &_flagVol.GetUAV());
     const uint3 xyz = _volParam->u3VoxelReso;
-    const uint ratio = _volParam->uVoxelBrickRatio;
+    const uint ratio = _volParam->uVoxelBlockRatio;
     cptCtx.Dispatch3D(xyz.x / ratio, xyz.y / ratio, xyz.z / ratio,
         THREAD_X, THREAD_Y, THREAD_Z);
+}
+
+void
+TSDFVolume::_UpdateBlockVolume(CommandContext& cmdCtx)
+{
+    GPU_PROFILE(cmdCtx, L"Blocks Updating");
+    ComputeContext& cptCtx = cmdCtx.GetComputeContext();
+    cptCtx.SetPipelineState(_cptCreateBlockQueuePSO);
+    cptCtx.SetDynamicDescriptors(2, 0, 1, &_blockWorkBuf.GetUAV());
+    uint3 xyz = _volParam->u3VoxelReso;
+    xyz.x /= _volParam->uVoxelBlockRatio;
+    xyz.y /= _volParam->uVoxelBlockRatio;
+    xyz.z /= _volParam->uVoxelBlockRatio;
+    cptCtx.Dispatch3D(xyz.x, xyz.y, xyz.z, THREAD_X, THREAD_Y, THREAD_Z);
 }
 
 void
 TSDFVolume::_UpdateVolume(CommandContext& cmdCtx,
     const ManagedBuf::BufInterface& buf)
 {
-    GPU_PROFILE(cmdCtx, L"Volume Updating");
     VolumeStruct type = _useStepInfoTex ? kFlagVol : kVoxel;
     const uint3 xyz = _volParam->u3VoxelReso;
     ComputeContext& cptCtx = cmdCtx.GetComputeContext();
-    cptCtx.SetPipelineState(_cptUpdatePSO[buf.type][type]);
     cptCtx.SetRootSignature(_rootsig);
-    cptCtx.SetDynamicDescriptors(2, 0, 2, buf.UAV);
-    cptCtx.SetDynamicDescriptors(2, 2, 1, &_flagVol.GetUAV());
-    if (!_typedLoadSupported) {
-        cptCtx.SetDynamicDescriptors(3, 1, 2, buf.SRV);
+    if (_blockVolumeUpdate) {
+        // Populate BlockQueue with active block
+        {
+            GPU_PROFILE(cptCtx, L"Block Queue Creation");
+            cptCtx.ResetCounter(_blockWorkBuf);
+            cptCtx.TransitionResource(_blockWorkBuf,
+                D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+            cptCtx.SetPipelineState(_cptCreateBlockQueuePSO);
+            cptCtx.SetDynamicDescriptors(2, 0, 1, &_blockWorkBuf.GetUAV());
+            const uint ratio = _volParam->uVoxelBlockRatio;
+            cptCtx.Dispatch3D(xyz.x / ratio, xyz.y / ratio, xyz.z / ratio,
+                THREAD_X, THREAD_Y, THREAD_Z);
+        }
+        // Resolve BlockQueue to update indirect args
+        {
+            GPU_PROFILE(cptCtx, L"Resolve Block Queue");
+            cptCtx.SetPipelineState(_cptBlockQueueResolvePSO);
+            cptCtx.TransitionResource(_indirectParams,
+                D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+            cptCtx.TransitionResource(_blockWorkBuf,
+                D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+            cptCtx.SetDynamicDescriptors(3, 0, 1,
+                &_blockWorkBuf.GetCounterSRV(cptCtx));
+            cptCtx.SetDynamicDescriptors(2, 0, 1, &_indirectParams.GetUAV());
+            cptCtx.Dispatch(1, 1, 1);
+        }
+        // Update Block Volumes
+        {
+            GPU_PROFILE(cptCtx, L"Volume Block Update");
+            cptCtx.SetPipelineState(_cptBlockVolumeUpdatePSO[buf.type][type]);
+            cptCtx.SetDynamicDescriptors(3, 0, 1, &_blockWorkBuf.GetSRV());
+            cptCtx.SetDynamicDescriptors(2, 0, 2, buf.UAV);
+            cptCtx.SetDynamicDescriptors(2, 2, 1, &_flagVol.GetUAV());
+            cptCtx.TransitionResource(_indirectParams,
+                D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
+            cptCtx.DispatchIndirect(_indirectParams, 0);
+        }
+    } else {
+        GPU_PROFILE(cptCtx, L"Volume Updating");
+        cptCtx.TransitionResource(_indirectParams,
+            D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
+        cptCtx.SetPipelineState(_cptUpdatePSO[buf.type][type]);
+        cptCtx.SetDynamicDescriptors(2, 0, 2, buf.UAV);
+        cptCtx.SetDynamicDescriptors(2, 2, 1, &_flagVol.GetUAV());
+        if (!_typedLoadSupported) {
+            cptCtx.SetDynamicDescriptors(3, 1, 2, buf.SRV);
+        }
+        cptCtx.Dispatch3D(xyz.x, xyz.y, xyz.z, THREAD_X, THREAD_Y, THREAD_Z);
     }
-    cptCtx.SetDynamicConstantBufferView(
-        0, sizeof(_cbPerFrame), (void*)&_cbPerFrame);
-    cptCtx.SetDynamicConstantBufferView(
-        1, sizeof(_cbPerCall), (void*)&_cbPerCall);
-    cptCtx.Dispatch3D(xyz.x, xyz.y, xyz.z, THREAD_X, THREAD_Y, THREAD_Z);
 }
 
 void
 TSDFVolume::_RenderNearFar(GraphicsContext& gfxCtx)
 {
     GPU_PROFILE(gfxCtx, L"Render NearFar");
-    gfxCtx.SetRootSignature(_rootsig);
     gfxCtx.SetPipelineState(_gfxStepInfoPSO);
     gfxCtx.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
     gfxCtx.SetRenderTargets(1, &_stepInfoTex.GetRTV());
     gfxCtx.SetDynamicDescriptors(3, 1, 1, &_flagVol.GetSRV());
     gfxCtx.SetIndexBuffer(_cubeTriangleStripIB.IndexBufferView());
     const uint3 xyz = _volParam->u3VoxelReso;
-    const uint ratio = _volParam->uVoxelBrickRatio;
+    const uint ratio = _volParam->uVoxelBlockRatio;
     uint BrickCount = xyz.x * xyz.y * xyz.z / ratio / ratio / ratio;
     gfxCtx.DrawIndexedInstanced(CUBE_TRIANGLESTRIP_LENGTH, BrickCount, 0, 0, 0);
 }
@@ -812,7 +900,7 @@ TSDFVolume::_RenderBrickGrid(GraphicsContext& gfxCtx)
     gfxCtx.SetDynamicDescriptors(3, 1, 1, &_flagVol.GetSRV());
     gfxCtx.SetIndexBuffer(_cubeLineStripIB.IndexBufferView());
     const uint3 xyz = _volParam->u3VoxelReso;
-    const uint ratio = _volParam->uVoxelBrickRatio;
+    const uint ratio = _volParam->uVoxelBlockRatio;
     uint BrickCount = xyz.x * xyz.y * xyz.z / ratio / ratio / ratio;
     gfxCtx.DrawIndexedInstanced(CUBE_LINESTRIP_LENGTH, BrickCount, 0, 0, 0);
 }

@@ -5,6 +5,7 @@
 
 // Params
 #define MAX_BALLS 128
+// The following three need to be the same
 #define THREAD_X 8
 #define THREAD_Y 8
 #define THREAD_Z 8
@@ -30,6 +31,7 @@ typedef DirectX::XMFLOAT4 float4;
 typedef DirectX::XMFLOAT3 float3;
 typedef DirectX::XMFLOAT2 float2;
 typedef DirectX::XMUINT3 uint3;
+typedef DirectX::XMUINT2 uint2;
 typedef DirectX::XMINT3 int3;
 typedef uint32_t uint;
 #endif
@@ -37,7 +39,10 @@ typedef uint32_t uint;
 // will be put into constant buffer, pay attention to alignment
 struct VolumeParam {
     uint3 u3VoxelReso;
-    uint uVoxelBrickRatio;
+    uint uVoxelBlockRatio;
+    uint2 NIU;
+    uint uThreadGroupBlockRatio;
+    uint uThreadGroupPerBlock;
     float3 f3HalfVoxelReso;
     float fVoxelSize;
     int3 i3ResoVector;
@@ -45,7 +50,7 @@ struct VolumeParam {
     float3 f3BoxMin;
     float fBlockSize;
     float3 f3BoxMax;
-    float fMaxWeight;
+    float NIU1;
     float3 f3HalfVolSize;
     float fTruncDist;
 };

@@ -20,20 +20,20 @@ Texture3D<uint> tex_srvWeightVol : register(t2);
 #if ENABLE_BRICKS
 RWTexture3D<int> tex_uavFlagVol : register(u2);
 #endif // ENABLE_BRICKS
-
-void fuseVoxel(BufIdx bufIdx, float fTSD, float fPreTSD)
-{
-#if NO_TYPED_LOAD
-    float fPreWeight = (float)tex_srvWeightVol[bufIdx];
-#else
-    float fPreWeight = (float)tex_uavWeightVol[bufIdx];
-#endif
-    float fNewWeight = 1.f + fPreWeight;
-    float fTSDF = fTSD + fPreTSD * fPreWeight;
-    fTSDF = fTSDF / fNewWeight;
-    tex_uavTSDFVol[bufIdx] = fTSDF;
-    tex_uavWeightVol[bufIdx] = (uint)min(fNewWeight, vParam.fMaxWeight);
-}
+//
+//void fuseVoxel(BufIdx bufIdx, float fTSD, float fPreTSD)
+//{
+//#if NO_TYPED_LOAD
+//    float fPreWeight = (float)tex_srvWeightVol[bufIdx];
+//#else
+//    float fPreWeight = (float)tex_uavWeightVol[bufIdx];
+//#endif
+//    float fNewWeight = 1.f + fPreWeight;
+//    float fTSDF = fTSD + fPreTSD * fPreWeight;
+//    fTSDF = fTSDF / fNewWeight;
+//    tex_uavTSDFVol[bufIdx] = fTSDF;
+//    tex_uavWeightVol[bufIdx] = (uint)min(fNewWeight, vParam.fMaxWeight);
+//}
 
 //------------------------------------------------------------------------------
 // Utility Funcs
@@ -68,7 +68,7 @@ void main(uint3 u3DTid: SV_DispatchThreadID)
 #if ENABLE_BRICKS
     // Update brick structure
     if (fSDF < vParam.fTruncDist) {
-        tex_uavFlagVol[u3DTid / vParam.uVoxelBrickRatio] = 1;
+        tex_uavFlagVol[u3DTid / vParam.uVoxelBlockRatio] = 1;
     }
 #endif // ENABLE_BRICKS
 }
