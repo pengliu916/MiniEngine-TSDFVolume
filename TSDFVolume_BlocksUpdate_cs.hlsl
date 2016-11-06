@@ -34,11 +34,7 @@ void main(uint3 GI : SV_GroupID, uint3 GTid : SV_GroupThreadID)
     // Current voxel pos in local space
     float3 f3Pos =
         (u3VolumeIdx - vParam.f3HalfVoxelReso + 0.5f) * vParam.fVoxelSize;
-    float fSDF = 1e15;
-    // Update voxel based on its position
-    for (uint i = 0; i < uNumOfBalls; i++) {
-        fSDF = min(fSDF, length(f4Balls[i].xyz - f3Pos) - f4Balls[i].w);
-    }
+    float fSDF = GetSDF(f3Pos);
     if (fSDF < -vParam.fTruncDist) {
         return;
     }

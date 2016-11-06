@@ -35,3 +35,26 @@ uint3 UnpackedToUint3(uint x)
     xyz.x = (x >> 20) & 0x000003ff;
     return xyz;
 }
+
+#if META_BALL
+float GetSDF(float3 f3Pos)
+{
+    float fSDF = 0.f;
+    // Update voxel based on its position
+    for (uint i = 0; i < uNumOfBalls; i++) {
+        fSDF += exp((length(f4Balls[i].xyz - f3Pos) - f4Balls[i].w) *
+            -vParam.fSmoothParam);
+    }
+    return -log(fSDF) / vParam.fSmoothParam;
+}
+#else
+float GetSDF(float3 f3Pos)
+{
+    float fSDF = 1e15;
+    // Update voxel based on its position
+    for (uint i = 0; i < uNumOfBalls; i++) {
+        fSDF = min(fSDF, length(f4Balls[i].xyz - f3Pos) - f4Balls[i].w);
+    }
+    return fSDF;
+}
+#endif

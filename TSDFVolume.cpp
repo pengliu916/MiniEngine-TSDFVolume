@@ -33,16 +33,16 @@ namespace {
 
     std::once_flag _psoCompiled_flag;
     RootSignature _rootsig;
-    ComputePSO _cptUpdatePSO[ManagedBuf::kNumType][TSDFVolume::kNumStruct];
+    ComputePSO _cptUpdatePSO[ManagedBuf::kNumType][TSDFVolume::kNumStruct][2];
     GraphicsPSO _gfxRenderPSO[ManagedBuf::kNumType]
         [TSDFVolume::kNumStruct][TSDFVolume::kNumFilter];
     GraphicsPSO _gfxStepInfoPSO;
     GraphicsPSO _gfxStepInfoDebugPSO;
     ComputePSO _cptFlagVolResetPSO;
-    ComputePSO _cptCreateBlockQueuePSO;
+    ComputePSO _cptCreateBlockQueuePSO[2];
     ComputePSO _cptBlockQueueResolvePSO;
     ComputePSO _cptBlockVolumeUpdatePSO[ManagedBuf::kNumType]
-        [TSDFVolume::kNumStruct];
+        [TSDFVolume::kNumStruct][2];
     ComputePSO _cptTSDFBufResetPSO[ManagedBuf::kNumType];
     StructuredBuffer _cubeVB;
     ByteAddressBuffer _cubeTriangleStripIB;
@@ -88,9 +88,9 @@ namespace {
         HRESULT hr;
         // Compile Shaders
         ComPtr<ID3DBlob>
-            volUpdateCS[ManagedBuf::kNumType][TSDFVolume::kNumStruct];
+            volUpdateCS[ManagedBuf::kNumType][TSDFVolume::kNumStruct][2];
         ComPtr<ID3DBlob>
-            blockUpdateCS[ManagedBuf::kNumType][TSDFVolume::kNumStruct];
+            blockUpdateCS[ManagedBuf::kNumType][TSDFVolume::kNumStruct][2];
         ComPtr<ID3DBlob> cubeVS, stepInfoVS, volReset[ManagedBuf::kNumType];
         ComPtr<ID3DBlob> raycastPS[ManagedBuf::kNumType]
             [TSDFVolume::kNumStruct][TSDFVolume::kNumFilter];
@@ -101,13 +101,10 @@ namespace {
             {"TEX3D_UAV", "0"},//2
             {"FILTER_READ", "0"},//3
             {"ENABLE_BRICKS", "0"},//4
-            {"NO_TYPED_LOAD", "0"},//5
+            {"META_BALL", "0"},//5
             {nullptr, nullptr}
         };
 
-        if (!_typedLoadSupported) {
-            macro[5].Definition = "1";
-        }
         V(_Compile(L"TSDFVolume_RayCast_vs.hlsl", "vs_5_1", macro, &cubeVS));
 
         uint DefIdx;
@@ -125,9 +122,15 @@ namespace {
                         macro, &volReset[i]));
                 }
                 V(_Compile(L"TSDFVolume_VolumeUpdate_cs.hlsl", "cs_5_1",
-                    macro, &volUpdateCS[i][j]));
+                    macro, &volUpdateCS[i][j][0]));
                 V(_Compile(L"TSDFVolume_BlocksUpdate_cs.hlsl", "cs_5_1",
-                    macro, &blockUpdateCS[i][j]));
+                    macro, &blockUpdateCS[i][j][0]));
+                macro[5].Definition = "1";
+                V(_Compile(L"TSDFVolume_VolumeUpdate_cs.hlsl", "cs_5_1",
+                    macro, &volUpdateCS[i][j][1]));
+                V(_Compile(L"TSDFVolume_BlocksUpdate_cs.hlsl", "cs_5_1",
+                    macro, &blockUpdateCS[i][j][1]));
+                macro[5].Definition = "0";
                 V(_Compile(L"TSDFVolume_RayCast_ps.hlsl", "ps_5_1",
                     macro, &raycastPS[i][j][TSDFVolume::kNoFilter]));
                 macro[3].Definition = "1"; // FILTER_READ
@@ -197,8 +200,12 @@ ObjName.Finalize();
                         raycastPS[i][k][j]->GetBufferSize());
                     _gfxRenderPSO[i][k][j].Finalize();
                 }
-                CreatePSO(_cptUpdatePSO[i][k], volUpdateCS[i][k]);
-                CreatePSO(_cptBlockVolumeUpdatePSO[i][k], blockUpdateCS[i][k]);
+                CreatePSO(_cptUpdatePSO[i][k][0], volUpdateCS[i][k][0]);
+                CreatePSO(_cptUpdatePSO[i][k][1], volUpdateCS[i][k][1]);
+                CreatePSO(_cptBlockVolumeUpdatePSO[i][k][0],
+                    blockUpdateCS[i][k][0]);
+                CreatePSO(_cptBlockVolumeUpdatePSO[i][k][1],
+                    blockUpdateCS[i][k][1]);
                 if (!compiledOnce) {
                     CreatePSO(_cptTSDFBufResetPSO[i], volReset[i]);
                 }
@@ -208,10 +215,11 @@ ObjName.Finalize();
 
         // Create PSO for render near far plane
         ComPtr<ID3DBlob> stepInfoPS, stepInfoDebugPS, resetCS,
-            createBlockQueueCS, resolveBlockQueueCS;
+            createBlockQueueCS[2], resolveBlockQueueCS;
         D3D_SHADER_MACRO macro1[] = {
             {"__hlsl", "1"},
             {"DEBUG_VIEW", "0"},
+            {"META_BALL", "0"},
             {nullptr, nullptr}
         };
         V(_Compile(L"TSDFVolume_StepInfo_cs.hlsl", "cs_5_1",
@@ -221,7 +229,10 @@ ObjName.Finalize();
         V(_Compile(L"TSDFVolume_StepInfo_vs.hlsl", "vs_5_1",
             macro1, &stepInfoVS));
         V(_Compile(L"TSDFVolume_BlockQueueCreate_cs.hlsl", "cs_5_1",
-            macro1, &createBlockQueueCS));
+            macro1, &createBlockQueueCS[0]));
+        macro1[2].Definition = "1";
+        V(_Compile(L"TSDFVolume_BlockQueueCreate_cs.hlsl", "cs_5_1",
+                macro1, &createBlockQueueCS[1]));
         V(_Compile(L"TSDFVolume_BlockQueueResolve_cs.hlsl", "cs_5_1",
             macro1, &resolveBlockQueueCS));
         macro[1].Definition = "1";
@@ -232,7 +243,8 @@ ObjName.Finalize();
         CreatePSO(_cptFlagVolResetPSO, resetCS);
 
         // Create PSO for update block volume
-        CreatePSO(_cptCreateBlockQueuePSO, createBlockQueueCS);
+        CreatePSO(_cptCreateBlockQueuePSO[0], createBlockQueueCS[0]);
+        CreatePSO(_cptCreateBlockQueuePSO[1], createBlockQueueCS[1]);
         CreatePSO(_cptBlockQueueResolvePSO, resolveBlockQueueCS);
 #undef  CreatePSO
 
@@ -336,8 +348,10 @@ TSDFVolume::TSDFVolume()
     _volParam->fVoxelSize = 1.f / 256.f;
     _ratioIdx = 0;
     _cbPerCall.uNumOfBalls = 20;
-    _cbPerFrame.bBlockRayCast = false;
-    _cbPerFrame.bInterpolatedNearSurface = false;
+    _cbPerCall.bBlockRayCast = false;
+    _cbPerCall.bInterpolatedNearSurface = false;
+    _cbPerCall.bMetaBall = false;
+    _cbPerCall.vParam.fSmoothParam = 20.f;
 }
 
 TSDFVolume::~TSDFVolume()
@@ -587,13 +601,20 @@ TSDFVolume::_RenderGui()
         ImGui::Checkbox("Block Volume Update", &_blockVolumeUpdate);
         ImGui::Unindent();
     }
+    ImGui::Checkbox("Blend Sphere", (bool*)&_cbPerCall.bMetaBall);
+    if (_cbPerCall.bMetaBall) {
+        ImGui::Indent();
+        ImGui::SliderFloat("Blend Param",
+            &_volParam->fSmoothParam, 15.f, 40.f);
+        ImGui::Unindent();
+    }
     if (ImGui::Checkbox("StepInfoTex", &_useStepInfoTex) &&
         _useStepInfoTex) {
         _needVolumeRebuild |= true;
     }
     if (_useStepInfoTex) {
         ImGui::Indent();
-        ImGui::Checkbox("Block Ray Cast", (bool*)&_cbPerFrame.bBlockRayCast);
+        ImGui::Checkbox("Block Ray Cast", (bool*)&_cbPerCall.bBlockRayCast);
         ImGui::Checkbox("Draw Debug Grid", &_stepInfoDebug);
         ImGui::Unindent();
     }
@@ -601,7 +622,7 @@ TSDFVolume::_RenderGui()
     static int iFilterType = (int)_filterType;
     ImGui::Text("Sample Method:");
     ImGui::Checkbox("Interpolate only near surface",
-        (bool*)&_cbPerFrame.bInterpolatedNearSurface);
+        (bool*)&_cbPerCall.bInterpolatedNearSurface);
     ImGui::RadioButton("Uninterpolated", &iFilterType, kNoFilter);
     ImGui::RadioButton("Trilinear", &iFilterType, kLinearFilter);
     ImGui::RadioButton("Trilinear Sampler", &iFilterType, kSamplerLinear);
@@ -787,7 +808,7 @@ TSDFVolume::_UpdateBlockVolume(CommandContext& cmdCtx)
 {
     GPU_PROFILE(cmdCtx, L"Blocks Updating");
     ComputeContext& cptCtx = cmdCtx.GetComputeContext();
-    cptCtx.SetPipelineState(_cptCreateBlockQueuePSO);
+    cptCtx.SetPipelineState(_cptCreateBlockQueuePSO[_cbPerCall.bMetaBall]);
     cptCtx.SetDynamicDescriptors(2, 0, 1, &_blockWorkBuf.GetUAV());
     uint3 xyz = _volParam->u3VoxelReso;
     xyz.x /= _volParam->uVoxelBlockRatio;
@@ -811,7 +832,8 @@ TSDFVolume::_UpdateVolume(CommandContext& cmdCtx,
             cptCtx.ResetCounter(_blockWorkBuf);
             cptCtx.TransitionResource(_blockWorkBuf,
                 D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-            cptCtx.SetPipelineState(_cptCreateBlockQueuePSO);
+            cptCtx.SetPipelineState(
+                _cptCreateBlockQueuePSO[_cbPerCall.bMetaBall]);
             cptCtx.SetDynamicDescriptors(2, 0, 1, &_blockWorkBuf.GetUAV());
             const uint ratio = _volParam->uVoxelBlockRatio;
             cptCtx.Dispatch3D(xyz.x / ratio, xyz.y / ratio, xyz.z / ratio,
@@ -833,7 +855,8 @@ TSDFVolume::_UpdateVolume(CommandContext& cmdCtx,
         // Update Block Volumes
         {
             GPU_PROFILE(cptCtx, L"Volume Block Update");
-            cptCtx.SetPipelineState(_cptBlockVolumeUpdatePSO[buf.type][type]);
+            cptCtx.SetPipelineState(_cptBlockVolumeUpdatePSO
+                [buf.type][type][_cbPerCall.bMetaBall]);
             cptCtx.SetDynamicDescriptors(3, 0, 1, &_blockWorkBuf.GetSRV());
             cptCtx.SetDynamicDescriptors(2, 0, 2, buf.UAV);
             cptCtx.SetDynamicDescriptors(2, 2, 1, &_flagVol.GetUAV());
@@ -845,7 +868,8 @@ TSDFVolume::_UpdateVolume(CommandContext& cmdCtx,
         GPU_PROFILE(cptCtx, L"Volume Updating");
         cptCtx.TransitionResource(_indirectParams,
             D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
-        cptCtx.SetPipelineState(_cptUpdatePSO[buf.type][type]);
+        cptCtx.SetPipelineState(
+            _cptUpdatePSO[buf.type][type][_cbPerCall.bMetaBall]);
         cptCtx.SetDynamicDescriptors(2, 0, 2, buf.UAV);
         cptCtx.SetDynamicDescriptors(2, 2, 1, &_flagVol.GetUAV());
         if (!_typedLoadSupported) {
