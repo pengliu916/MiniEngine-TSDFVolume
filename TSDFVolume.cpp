@@ -646,8 +646,10 @@ TSDFVolume::_RenderGui()
         ManagedBuf::kTypedBuffer);
     ImGui::RadioButton("Use Texture3D Buffer", &uBufferTypeChoice,
         ManagedBuf::k3DTexBuffer);
-    if (iFilterType > kLinearFilter &&
-        uBufferTypeChoice != ManagedBuf::k3DTexBuffer) {
+    if ((iFilterType > kLinearFilter &&
+        uBufferTypeChoice != ManagedBuf::k3DTexBuffer) ||
+        (uBufferTypeChoice == ManagedBuf::kTypedBuffer &&
+            _volBuf.GetReso().z > 320)) {
         uBufferTypeChoice = _volBuf.GetType();
     }
     if ((uBufferTypeChoice != _volBuf.GetType() ||
@@ -681,11 +683,11 @@ TSDFVolume::_RenderGui()
     ImGui::RadioButton("256x512x512##X", (int*)&uiReso.z, 256);
     ImGui::RadioButton("320x640x640##X", (int*)&uiReso.z, 320);
     // Since Buffer Element Count is limited to 2^27, the following reso
-    // will not satisfied this requirement
-    /*
-    ImGui::RadioButton("384x768x768##X", (int*)&uiReso.z, 384);
-    ImGui::RadioButton("448x896x896##X", (int*)&uiReso.z, 448);
-    */
+    // will not satisfied buffer requirement
+    if (uBufferTypeChoice == ManagedBuf::k3DTexBuffer) {
+        ImGui::RadioButton("384x768x768##X", (int*)&uiReso.z, 384);
+        ImGui::RadioButton("512x1024x1024##X", (int*)&uiReso.z, 512);
+    }
     uiReso.x = uiReso.y = uiReso.z * 2;
     if ((_IsResolutionChanged(uiReso, _submittedReso) ||
         _volBuf.GetType() != uBufferTypeChoice) &&
