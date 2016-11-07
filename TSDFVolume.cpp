@@ -14,6 +14,7 @@ namespace {
     bool _stepInfoDebug = false;
     bool _blockVolumeUpdate = false;
     bool _resetVolume = true;
+    bool _useQuadRaycast = false;
 
     // define the geometry for a triangle.
     const XMFLOAT3 cubeVertices[] = {
@@ -35,7 +36,7 @@ namespace {
     RootSignature _rootsig;
     ComputePSO _cptUpdatePSO[ManagedBuf::kNumType][TSDFVolume::kNumStruct][2];
     GraphicsPSO _gfxRenderPSO[ManagedBuf::kNumType]
-        [TSDFVolume::kNumStruct][TSDFVolume::kNumFilter];
+        [TSDFVolume::kNumStruct][TSDFVolume::kNumFilter][2];
     GraphicsPSO _gfxStepInfoPSO;
     GraphicsPSO _gfxStepInfoDebugPSO;
     ComputePSO _cptFlagVolResetPSO;
@@ -91,7 +92,8 @@ namespace {
             volUpdateCS[ManagedBuf::kNumType][TSDFVolume::kNumStruct][2];
         ComPtr<ID3DBlob>
             blockUpdateCS[ManagedBuf::kNumType][TSDFVolume::kNumStruct][2];
-        ComPtr<ID3DBlob> cubeVS, stepInfoVS, volReset[ManagedBuf::kNumType];
+        ComPtr<ID3DBlob> cubeVS, quadVS, stepInfoVS,
+            volReset[ManagedBuf::kNumType];
         ComPtr<ID3DBlob> raycastPS[ManagedBuf::kNumType]
             [TSDFVolume::kNumStruct][TSDFVolume::kNumFilter];
 
@@ -102,10 +104,14 @@ namespace {
             {"FILTER_READ", "0"},//3
             {"ENABLE_BRICKS", "0"},//4
             {"META_BALL", "0"},//5
+            {"QUAD_RAYCAST", "0"},
             {nullptr, nullptr}
         };
 
         V(_Compile(L"TSDFVolume_RayCast_vs.hlsl", "vs_5_1", macro, &cubeVS));
+        macro[6].Definition = "1";
+        V(_Compile(L"TSDFVolume_RayCast_vs.hlsl", "vs_5_1", macro, &quadVS));
+        macro[6].Definition = "0";
 
         uint DefIdx;
         for (int j = 0; j < TSDFVolume::kNumStruct; ++j) {
@@ -179,26 +185,31 @@ ObjName.Finalize();
             static bool compiledOnce = false;
             for (int i = 0; i < ManagedBuf::kNumType; ++i) {
                 for (int j = 0; j < TSDFVolume::kNumFilter; ++j) {
-                    _gfxRenderPSO[i][k][j].SetRootSignature(_rootsig);
-                    _gfxRenderPSO[i][k][j].SetInputLayout(
-                        _countof(inputElementDescs), inputElementDescs);
-                    _gfxRenderPSO[i][k][j].SetRasterizerState(
+                    _gfxRenderPSO[i][k][j][0].SetRootSignature(_rootsig);
+                    _gfxRenderPSO[i][k][j][0].SetRasterizerState(
                         Graphics::g_RasterizerDefault);
-                    _gfxRenderPSO[i][k][j].SetBlendState(
+                    _gfxRenderPSO[i][k][j][0].SetBlendState(
                         Graphics::g_BlendDisable);
-                    _gfxRenderPSO[i][k][j].SetDepthStencilState(
+                    _gfxRenderPSO[i][k][j][0].SetDepthStencilState(
                         Graphics::g_DepthStateReadWrite);
-                    _gfxRenderPSO[i][k][j].SetSampleMask(UINT_MAX);
-                    _gfxRenderPSO[i][k][j].SetPrimitiveTopologyType(
+                    _gfxRenderPSO[i][k][j][0].SetSampleMask(UINT_MAX);
+                    _gfxRenderPSO[i][k][j][0].SetPrimitiveTopologyType(
                         D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
-                    _gfxRenderPSO[i][k][j].SetRenderTargetFormats(
+                    _gfxRenderPSO[i][k][j][0].SetRenderTargetFormats(
                         1, &ColorFormat, DepthFormat);
-                    _gfxRenderPSO[i][k][j].SetVertexShader(
-                        cubeVS->GetBufferPointer(), cubeVS->GetBufferSize());
-                    _gfxRenderPSO[i][k][j].SetPixelShader(
+                    _gfxRenderPSO[i][k][j][0].SetPixelShader(
                         raycastPS[i][k][j]->GetBufferPointer(),
                         raycastPS[i][k][j]->GetBufferSize());
-                    _gfxRenderPSO[i][k][j].Finalize();
+                    _gfxRenderPSO[i][k][j][1] = _gfxRenderPSO[i][k][j][0];
+                    _gfxRenderPSO[i][k][j][0].SetInputLayout(
+                        _countof(inputElementDescs), inputElementDescs);
+                    _gfxRenderPSO[i][k][j][1].SetInputLayout(0, nullptr);
+                    _gfxRenderPSO[i][k][j][1].SetVertexShader(
+                        quadVS->GetBufferPointer(), quadVS->GetBufferSize());
+                    _gfxRenderPSO[i][k][j][0].SetVertexShader(
+                        cubeVS->GetBufferPointer(), cubeVS->GetBufferSize());
+                    _gfxRenderPSO[i][k][j][0].Finalize();
+                    _gfxRenderPSO[i][k][j][1].Finalize();
                 }
                 CreatePSO(_cptUpdatePSO[i][k][0], volUpdateCS[i][k][0]);
                 CreatePSO(_cptUpdatePSO[i][k][1], volUpdateCS[i][k][1]);
@@ -422,7 +433,11 @@ TSDFVolume::OnSizeChanged()
     uint32_t height = Core::g_config.swapChainDesc.Height;
 
     float fAspectRatio = width / (FLOAT)height;
-    m_camera.Projection(XM_PIDIV2 / 2, fAspectRatio);
+    _cbPerFrame.fWideHeightRatio = fAspectRatio;
+    _cbPerFrame.fClipDist = 0.1f;
+    float fHFov = XM_PIDIV4;
+    _cbPerFrame.fTanHFov = tan(fHFov / 2.f);
+    m_camera.Projection(fHFov, fAspectRatio);
 
     _stepInfoTex.Destroy();
     // Create MinMax Buffer
@@ -595,6 +610,7 @@ void
 TSDFVolume::_RenderGui()
 {
     ImGui::Begin("TSDFVolume");
+    ImGui::Checkbox("Quad Raycast", &_useQuadRaycast);
     ImGui::Checkbox("Animation", &_isAnimated);
     if (_isAnimated) {
         ImGui::Indent();
@@ -721,7 +737,8 @@ TSDFVolume::_UpdatePerFrameData(const DirectX::XMMATRIX& wvp,
 {
     _cbPerFrame.mWorldViewProj = wvp;
     _cbPerFrame.mView = mView;
-    _cbPerFrame.f4ViewPos = eyePos;
+    _cbPerFrame.mInvView = XMMatrixInverse(nullptr, mView);
+    _cbPerFrame.f4ViewPos = eyePos; 
     if (_isAnimated || _needVolumeRebuild) {
         _animateTime += Core::g_deltaTime;
         for (uint i = 0; i < _cbPerCall.uNumOfBalls; i++) {
@@ -902,7 +919,8 @@ TSDFVolume::_RenderVolume(GraphicsContext& gfxCtx,
 {
     GPU_PROFILE(gfxCtx, L"Rendering");
     VolumeStruct type = _useStepInfoTex ? kFlagVol : kVoxel;
-    gfxCtx.SetPipelineState(_gfxRenderPSO[buf.type][type][_filterType]);
+    gfxCtx.SetPipelineState(
+        _gfxRenderPSO[buf.type][type][_filterType][_useQuadRaycast]);
     gfxCtx.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
     gfxCtx.SetDynamicDescriptors(3, 0, 1, buf.SRV);
     if (_useStepInfoTex) {
@@ -911,8 +929,12 @@ TSDFVolume::_RenderVolume(GraphicsContext& gfxCtx,
     }
     gfxCtx.SetRenderTargets(1, &Graphics::g_SceneColorBuffer.GetRTV(),
         Graphics::g_SceneDepthBuffer.GetDSV());
-    gfxCtx.SetIndexBuffer(_cubeTriangleStripIB.IndexBufferView());
-    gfxCtx.DrawIndexed(CUBE_TRIANGLESTRIP_LENGTH);
+    if (_useQuadRaycast) {
+        gfxCtx.Draw(3);
+    } else {
+        gfxCtx.SetIndexBuffer(_cubeTriangleStripIB.IndexBufferView());
+        gfxCtx.DrawIndexed(CUBE_TRIANGLESTRIP_LENGTH);
+    }
 }
 
 void

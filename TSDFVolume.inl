@@ -59,6 +59,11 @@ CBUFFER_ALIGN STRUCT(cbuffer) PerFrameDataCB REGISTER(b0)
 {
     matrix mWorldViewProj;
     matrix mView;
+    matrix mInvView;
+    float fWideHeightRatio;
+    float fTanHFov;
+    float fClipDist;
+    float NIU;
     float4 f4ViewPos;
     float4 f4Balls[MAX_BALLS];
     float4 f4BallsCol[MAX_BALLS];

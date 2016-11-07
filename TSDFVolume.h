@@ -29,7 +29,7 @@ public:
 
     float m_camOrbitRadius = 2.f;
     float m_camMaxOribtRadius = 5.f;
-    float m_camMinOribtRadius = 1.f;
+    float m_camMinOribtRadius = 0.2f;
 
     OrbitCamera m_camera;
 

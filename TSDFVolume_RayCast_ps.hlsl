@@ -17,8 +17,8 @@ SamplerState samp_Linear : register(s0);
 //------------------------------------------------------------------------------
 struct Ray
 {
-    float4 f4o;
-    float4 f4d;
+    float3 f3o;
+    float3 f3d;
 };
 
 //------------------------------------------------------------------------------
@@ -28,9 +28,9 @@ bool IntersectBox(Ray r, float3 boxmin, float3 boxmax,
     out float tnear, out float tfar)
 {
     // compute intersection of ray with all six bbox planes
-    float3 invR = 1.0 / r.f4d.xyz;
-    float3 tbot = invR * (boxmin.xyz - r.f4o.xyz);
-    float3 ttop = invR * (boxmax.xyz - r.f4o.xyz);
+    float3 invR = 1.0 / r.f3d;
+    float3 tbot = invR * (boxmin - r.f3o);
+    float3 ttop = invR * (boxmax - r.f3o);
 
     // re-order intersections to find smallest and largest on each axis
     float3 tmin = min(ttop, tbot);
@@ -91,12 +91,12 @@ float3 getNormal(float3 f3Idx)
 void isoSurfaceShading(Ray eyeray, float2 f2NearFar,
     inout float4 f4OutColor, inout float fDepth)
 {
-    float3 f3Idx = eyeray.f4o.xyz + eyeray.f4d.xyz * f2NearFar.x;
+    float3 f3Idx = eyeray.f3o + eyeray.f3d * f2NearFar.x;
     f3Idx = f3Idx * vParam.fInvVoxelSize + vParam.f3HalfVoxelReso;
     float t = f2NearFar.x;
     float fDeltaT = vParam.fVoxelSize;
     // f3IdxStep = eyeray.f4d.xyz * fDeltaT / fVoxelSize
-    float3 f3IdxStep = eyeray.f4d.xyz;
+    float3 f3IdxStep = eyeray.f3d;
     bool bSurfaceFound = false;
 
     int3 i3NewBlockIdx, i3BlockIdx = int3(-1, -1, -1);
@@ -120,7 +120,7 @@ void isoSurfaceShading(Ray eyeray, float2 f2NearFar,
                 IntersectBox(eyeray, f3Offset, f3Offset + vParam.fBlockSize,
                     f2BlockNearFar.x, f2BlockNearFar.y);
                 t = max(t + fDeltaT, f2BlockNearFar.y + fDeltaT);
-                f3Idx = eyeray.f4o.xyz + eyeray.f4d.xyz * t;
+                f3Idx = eyeray.f3o + eyeray.f3d * t;
                 f3Idx = f3Idx * vParam.fInvVoxelSize + vParam.f3HalfVoxelReso;
                 continue;
             }
@@ -162,30 +162,40 @@ void isoSurfaceShading(Ray eyeray, float2 f2NearFar,
 //------------------------------------------------------------------------------
 // Pixel Shader
 //------------------------------------------------------------------------------
-void main( float4 f4Pos : POSITION, float4 f4ProjPos : SV_POSITION,
+void main( float3 f3Pos : POSITION1, float4 f4ProjPos : SV_POSITION,
     out float4 f4Col : SV_Target, out float fDepth : SV_Depth)
 {
-    Ray eyeray;
-    //world space
-    eyeray.f4o = f4ViewPos;
-    eyeray.f4d = f4Pos - eyeray.f4o;
-    eyeray.f4d = normalize( eyeray.f4d );
-
     // calculate ray intersection with bounding box
     float fTnear, fTfar; 
+    f4Col = float4(1.f, 1.f, 1.f, 0.f) * 0.2f;
+    fDepth = 0.f;
 #if ENABLE_BRICKS
     int2 uv = f4ProjPos.xy;
-    float2 f2NearFar =
-        tex_srvNearFar.Load(int3(uv, 0)).xy / length(eyeray.f4d.xyz);
+    float2 f2NearFar = tex_srvNearFar.Load(int3(uv, 0)).xy;
+    if (f2NearFar.y >= -0.01f) {
+        discard;
+        return;
+    }
+
+    Ray eyeray;
+    //world space
+    eyeray.f3o = f4ViewPos.xyz;
+    eyeray.f3d = f3Pos - eyeray.f3o;
+    eyeray.f3d = normalize(eyeray.f3d);
+
+    f2NearFar /= length(eyeray.f3d);
     fTnear = f2NearFar.x;
     fTfar = -f2NearFar.y;
     bool bHit = (fTfar - fTnear) > 0;
 #else
+    Ray eyeray;
+    //world space
+    eyeray.f3o = f4ViewPos.xyz;
+    eyeray.f3d = f3Pos - eyeray.f3o;
+    eyeray.f3d = normalize(eyeray.f3d);
     bool bHit =
         IntersectBox(eyeray, vParam.f3BoxMin, vParam.f3BoxMax , fTnear, fTfar);
 #endif // ENABLE_BRICKS
-    f4Col = float4(1.f, 1.f, 1.f, 0.f) * 0.2f;
-    fDepth = 0.f;
     if (!bHit) {
         discard;
         return;
