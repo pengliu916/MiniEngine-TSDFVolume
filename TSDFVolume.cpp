@@ -384,7 +384,7 @@ TSDFVolume::OnCreateResource()
     ASSERT(Graphics::g_device);
     // Create resource for volume
     _volBuf.CreateResource();
-    _blockWorkBuf.Create(L"Work Queue", 0xfffff, 4);
+    _readBackBuffer.Create(L"ReadBackBuffer", 1, sizeof(uint32_t));
 
     // Initial value for dispatch indirect args. args are thread group count
     // x, y, z. Since we only need 1 dispatch thread group, so we pre-populate
@@ -416,6 +416,7 @@ TSDFVolume::OnCreateResource()
 void
 TSDFVolume::OnDestroy()
 {
+    _readBackBuffer.Destroy();
     _indirectParams.Destroy();
     _blockWorkBuf.Destroy();
     _volBuf.Destroy();
@@ -615,6 +616,18 @@ TSDFVolume::_RenderGui()
     if (_isAnimated) {
         ImGui::Indent();
         ImGui::Checkbox("Block Volume Update", &_blockVolumeUpdate);
+        if (_blockVolumeUpdate) {
+            ImGui::Indent();
+            ImGui::Checkbox("ReadBack Block Count", &_readBack);
+            if (_readBack) {
+                float usedBlockPct = _blockQueueCounter / (float)_maxJobCount;
+                char buf[64];
+                sprintf_s(buf, 64, "%d/%d Blocks",
+                    _blockQueueCounter, _maxJobCount);
+                ImGui::ProgressBar(usedBlockPct, ImVec2(-1.f, 0.f), buf);
+            }
+            ImGui::Unindent();
+        }
         ImGui::Unindent();
     }
     ImGui::Checkbox("Blend Sphere", (bool*)&_cbPerCall.bMetaBall);
@@ -729,6 +742,10 @@ TSDFVolume::_CreateBrickVolume(const uint3& reso, const uint ratio)
     _flagVol.Destroy();
     _flagVol.Create(L"FlagVol", reso.x / ratio, reso.y / ratio,
         reso.z / ratio, 1, DXGI_FORMAT_R32_UINT);
+    _blockWorkBuf.Destroy();
+    _maxJobCount =
+        (uint32_t)(reso.x * reso.y * reso.z / ratio / ratio / ratio);
+    _blockWorkBuf.Create(L"Work Queue", _maxJobCount, 4);
 }
 
 void
@@ -882,6 +899,18 @@ TSDFVolume::_UpdateVolume(CommandContext& cmdCtx,
             cptCtx.TransitionResource(_indirectParams,
                 D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
             cptCtx.DispatchIndirect(_indirectParams, 0);
+        }
+
+        // Copy data to read back buffer and read it back
+        if (_readBack) {
+            Graphics::g_cmdListMngr.WaitForFence(_readBackFence);
+            _readBackBuffer.Map(&_readBackRange,
+                reinterpret_cast<void**>(&_readBackPtr));
+            _blockQueueCounter = *_readBackPtr;
+            _readBackBuffer.Unmap(nullptr);
+            cptCtx.CopyBufferRegion(
+                _readBackBuffer, 0, _blockWorkBuf.GetCounterBuffer(), 0, 4);
+            _readBackFence = cptCtx.Flush();
         }
     } else {
         GPU_PROFILE(cptCtx, L"Volume Updating");

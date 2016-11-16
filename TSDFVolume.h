@@ -95,6 +95,17 @@ private:
     // info. to control volume update, processed by cpu
     std::vector<Ball> _ballsData;
 
+    // max job count of work queue buffer
+    uint32_t _maxJobCount;
+
+    // resource for readback buffer
+    uint _blockQueueCounter = 0;
+    ReadBackBuffer _readBackBuffer;
+    uint32_t* _readBackPtr;
+    D3D12_RANGE _readBackRange;
+    uint64_t _readBackFence = 0;
+    bool _readBack = false;
+
     double _animateTime = 0.0;
     bool _isAnimated = true;
     bool _needVolumeRebuild = true;
