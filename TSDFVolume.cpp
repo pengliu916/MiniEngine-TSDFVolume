@@ -246,7 +246,7 @@ ObjName.Finalize();
                 macro1, &createBlockQueueCS[1]));
         V(_Compile(L"TSDFVolume_BlockQueueResolve_cs.hlsl", "cs_5_1",
             macro1, &resolveBlockQueueCS));
-        macro[1].Definition = "1";
+        macro1[1].Definition = "1";
         V(_Compile(L"TSDFVolume_StepInfo_ps.hlsl", "ps_5_1",
             macro1, &stepInfoDebugPS));
 
@@ -300,7 +300,8 @@ ObjName.Finalize();
         _gfxStepInfoPSO.SetPixelShader(
             stepInfoPS->GetBufferPointer(), stepInfoPS->GetBufferSize());
         _gfxStepInfoDebugPSO.SetPixelShader(
-            stepInfoPS->GetBufferPointer(), stepInfoDebugPS->GetBufferSize());
+            stepInfoDebugPS->GetBufferPointer(),
+            stepInfoDebugPS->GetBufferSize());
         _gfxStepInfoPSO.Finalize();
         _gfxStepInfoDebugPSO.Finalize();
     }
@@ -757,7 +758,7 @@ TSDFVolume::_UpdatePerFrameData(const DirectX::XMMATRIX& wvp,
     _cbPerFrame.mInvView = XMMatrixInverse(nullptr, mView);
     _cbPerFrame.f4ViewPos = eyePos; 
     if (_isAnimated || _needVolumeRebuild) {
-        _animateTime += Core::g_deltaTime;
+        //_animateTime += Core::g_deltaTime;
         for (uint i = 0; i < _cbPerCall.uNumOfBalls; i++) {
             Ball ball = _ballsData[i];
             _cbPerFrame.f4Balls[i].x =

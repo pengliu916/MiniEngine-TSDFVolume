@@ -13,6 +13,7 @@ RWTexture3D<float> tex_uavTSDFVol : register(u0);
 RWTexture3D<int> tex_uavFlagVol : register(u2);
 #endif // ENABLE_BRICKS
 
+groupshared uint uFlag = 0;
 //------------------------------------------------------------------------------
 // Compute Shader
 //------------------------------------------------------------------------------
@@ -36,7 +37,7 @@ void main(uint3 GI : SV_GroupID, uint3 GTid : SV_GroupThreadID)
         (u3VolumeIdx - vParam.f3HalfVoxelReso + 0.5f) * vParam.fVoxelSize;
     float fSDF = GetSDF(f3Pos);
     if (fSDF < -vParam.fTruncDist) {
-        return;
+        //return;
     }
     // Write back to voxel 
     tex_uavTSDFVol[BUFFER_INDEX(u3VolumeIdx)] =
@@ -44,7 +45,15 @@ void main(uint3 GI : SV_GroupID, uint3 GTid : SV_GroupThreadID)
 #if ENABLE_BRICKS
     // Update brick structure
     if (fSDF < vParam.fTruncDist) {
-        tex_uavFlagVol[u3BlockIdx] = 1;
+        //if (tex_uavFlagVol[u3BlockIdx] == 0) {
+            tex_uavFlagVol[u3BlockIdx] = 1;
+        //}
+        //InterlockedAdd(tex_uavFlagVol[u3BlockIdx], 1);
+        //InterlockedCompareStore(tex_uavFlagVol[u3BlockIdx], 0, 1);
+        //InterlockedCompareStore(uFlag, 0, 1);
     }
+    /*if (all(GTid == uint3(0,0,0)) && uFlag) {
+        InterlockedCompareStore(tex_uavFlagVol[u3BlockIdx], 0, 1);
+    }*/
 #endif // ENABLE_BRICKS
 }
