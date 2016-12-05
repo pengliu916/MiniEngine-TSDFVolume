@@ -741,7 +741,7 @@ TSDFVolume::_CreateBrickVolume(const uint3& reso, const uint ratio)
     Graphics::g_cmdListMngr.IdleGPU();
     _flagVol.Destroy();
     _flagVol.Create(L"FlagVol", reso.x / ratio, reso.y / ratio,
-        reso.z / ratio, 1, DXGI_FORMAT_R32_UINT);
+        reso.z / ratio, 1, DXGI_FORMAT_R8_UINT);
     _blockWorkBuf.Destroy();
     _maxJobCount =
         (uint32_t)(reso.x * reso.y * reso.z / ratio / ratio / ratio);
@@ -840,20 +840,6 @@ TSDFVolume::_CleanBrickVolume(ComputeContext& cptCtx)
 }
 
 void
-TSDFVolume::_UpdateBlockVolume(CommandContext& cmdCtx)
-{
-    GPU_PROFILE(cmdCtx, L"Blocks Updating");
-    ComputeContext& cptCtx = cmdCtx.GetComputeContext();
-    cptCtx.SetPipelineState(_cptCreateBlockQueuePSO[_cbPerCall.bMetaBall]);
-    cptCtx.SetDynamicDescriptors(2, 0, 1, &_blockWorkBuf.GetUAV());
-    uint3 xyz = _volParam->u3VoxelReso;
-    xyz.x /= _volParam->uVoxelBlockRatio;
-    xyz.y /= _volParam->uVoxelBlockRatio;
-    xyz.z /= _volParam->uVoxelBlockRatio;
-    cptCtx.Dispatch3D(xyz.x, xyz.y, xyz.z, THREAD_X, THREAD_Y, THREAD_Z);
-}
-
-void
 TSDFVolume::_UpdateVolume(CommandContext& cmdCtx,
     const ManagedBuf::BufInterface& buf)
 {
@@ -904,7 +890,7 @@ TSDFVolume::_UpdateVolume(CommandContext& cmdCtx,
         // Copy data to read back buffer and read it back
         if (_readBack) {
             Graphics::g_cmdListMngr.WaitForFence(_readBackFence);
-            _readBackBuffer.Map(&_readBackRange,
+            _readBackBuffer.Map(nullptr,
                 reinterpret_cast<void**>(&_readBackPtr));
             _blockQueueCounter = *_readBackPtr;
             _readBackBuffer.Unmap(nullptr);

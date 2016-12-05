@@ -56,7 +56,6 @@ private:
         const ManagedBuf::BufInterface& buf);
     // Render subroutine
     void _CleanBrickVolume(ComputeContext& cptCtx);
-    void _UpdateBlockVolume(CommandContext& cmdCtx);
     void _UpdateVolume(CommandContext& cmdCtx,
         const ManagedBuf::BufInterface& buf);
     void _RenderVolume(GraphicsContext& gfxCtx,
